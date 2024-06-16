@@ -61,7 +61,7 @@ contract RegistryCoordinator is
         IStakeRegistry _stakeRegistry,
         IBLSApkRegistry _blsApkRegistry,
         IIndexRegistry _indexRegistry
-    ) 
+    )
         RegistryCoordinatorStorage(_serviceManager, _stakeRegistry, _blsApkRegistry, _indexRegistry)
         EIP712("AVSRegistryCoordinator", "v0.0.1") 
     {
