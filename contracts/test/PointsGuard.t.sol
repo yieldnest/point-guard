@@ -14,19 +14,19 @@ import {IndexRegistry} from "@eigenlayer-middleware/src/IndexRegistry.sol";
 
 import {EmptyContract} from "@eigenlayer/test/mocks/EmptyContract.sol";
 
-import {IncredibleSquaringServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/IncredibleSquaringServiceManager.sol";
-import {IncredibleSquaringTaskManager, IIncredibleSquaringTaskManager} from "../src/IncredibleSquaringTaskManager.sol";
+import {PointsGuardServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/PointsGuardServiceManager.sol";
+import {PointsGuardTaskManager, IPointsGuardTaskManager} from "../src/PointsGuardTaskManager.sol";
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 contract PointsGuardTest is Test {
 
-    event NewTaskCreated(uint32 indexed taskIndex, IIncredibleSquaringTaskManager.Task task);
+    event NewTaskCreated(uint32 indexed taskIndex, IPointsGuardTaskManager.Task task);
 
     event TaskResponded(
-        IIncredibleSquaringTaskManager.TaskResponse taskResponse,
-        IIncredibleSquaringTaskManager.TaskResponseMetadata taskResponseMetadata
+        IPointsGuardTaskManager.TaskResponse taskResponse,
+        IPointsGuardTaskManager.TaskResponseMetadata taskResponseMetadata
     );
 
     event TaskChallengedUnsuccessfully(
@@ -34,20 +34,31 @@ contract PointsGuardTest is Test {
         address indexed challenger
     );
 
-    uint256 public numberToBeSquared = 10;
+    event TaskChallengedSuccessfully(
+        uint32 indexed taskIndex,
+        address indexed challenger
+    );
+
+    event TaskChallengeResolved(
+        uint32 indexed referenceTaskIndex,
+        bool isChallengeValid
+    );
+
+    uint256 public protocolId = 0;
     uint32 public quorumThresholdPercentage = 0;
     uint32 public taskCreatedBlock;
     bytes public quorumNumbers = "0x1234";
 
     address public aggregator;
     address public generator;
+    address public proxyOwner;
     address public owner;
     address public user;
 
     address public emptyContract;
 
-    IncredibleSquaringTaskManager public taskManager;
-    IncredibleSquaringServiceManager public serviceManager;
+    PointsGuardTaskManager public taskManager;
+    PointsGuardServiceManager public serviceManager;
     RegistryCoordinator public registryCoordinator;
     StakeRegistry public stakeRegistry;
     BLSApkRegistry public blsApkRegistry;
@@ -67,6 +78,7 @@ contract PointsGuardTest is Test {
     function setUp() public {
 
         // initialize users
+        proxyOwner = _createUser("proxyOwner");
         owner = _createUser("owner");
         user = _createUser("user");
         aggregator = _createUser("aggregator");
@@ -76,15 +88,15 @@ contract PointsGuardTest is Test {
         emptyContract = address(new EmptyContract());
 
         // deploy proxy contracts
-        taskManager = IncredibleSquaringTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
-        serviceManager = IncredibleSquaringServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
-        registryCoordinator = RegistryCoordinator(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
-        stakeRegistry = StakeRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
-        blsApkRegistry = BLSApkRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
-        indexRegistry = IndexRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(owner), "")));
+        taskManager = PointsGuardTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        serviceManager = PointsGuardServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        registryCoordinator = RegistryCoordinator(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        stakeRegistry = StakeRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        blsApkRegistry = BLSApkRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        indexRegistry = IndexRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
 
         // deploy implementation contracts and initialize
-        vm.startPrank(owner);
+        vm.startPrank(proxyOwner);
 
         // StakeRegistry
         address _stakeRegistryImplementation = address(new StakeRegistry(IRegistryCoordinator(registryCoordinator), IDelegationManager(delegationManager)));
@@ -103,11 +115,11 @@ contract PointsGuardTest is Test {
         TransparentUpgradeableProxy(payable(address(registryCoordinator))).upgradeTo(_registryCoordinatorImplementation);
 
         // TaskManager
-        address _taskManagerImplementation = address(new IncredibleSquaringTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
+        address _taskManagerImplementation = address(new PointsGuardTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
         TransparentUpgradeableProxy(payable(address(taskManager))).upgradeTo(_taskManagerImplementation);
 
         // ServiceManager
-        address _serviceManagerImplementation = address(new IncredibleSquaringServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), IncredibleSquaringTaskManager(taskManager)));
+        address _serviceManagerImplementation = address(new PointsGuardServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), PointsGuardTaskManager(taskManager), owner));
         TransparentUpgradeableProxy(payable(address(serviceManager))).upgradeTo(_serviceManagerImplementation);
 
         vm.stopPrank();
@@ -123,6 +135,11 @@ contract PointsGuardTest is Test {
         vm.label({ account: address(registryCoordinator), newLabel: "RegistryCoordinator" });
         vm.label({ account: address(taskManager), newLabel: "TaskManager" });
         vm.label({ account: address(serviceManager), newLabel: "ServiceManager" });
+
+        // register protocol
+        string memory _pointsScriptReference = "GITHUB_URL";
+        vm.prank(owner);
+        serviceManager.registerProtocol(_pointsScriptReference);
     }
 
     // ============================================================================================
@@ -133,8 +150,9 @@ contract PointsGuardTest is Test {
 
         taskCreatedBlock = uint32(block.number);
 
-        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
-            numberToBeSquared: numberToBeSquared,
+        IPointsGuardTaskManager.Task memory _task = IPointsGuardTaskManager.Task({
+            protocolId: protocolId,
+            user: user,
             taskCreatedBlock: taskCreatedBlock,
             quorumThresholdPercentage: quorumThresholdPercentage,
             quorumNumbers: quorumNumbers
@@ -145,7 +163,8 @@ contract PointsGuardTest is Test {
 
         vm.prank(generator);
         taskManager.createNewTask(
-            numberToBeSquared,
+            protocolId,
+            user,
             quorumThresholdPercentage,
             quorumNumbers
         );
@@ -154,16 +173,18 @@ contract PointsGuardTest is Test {
     function testRespondToTask() public {
         testCreateNewTask();
 
-        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
-            numberToBeSquared: numberToBeSquared,
+        IPointsGuardTaskManager.Task memory _task = IPointsGuardTaskManager.Task({
+            protocolId: protocolId,
+            user: user,
             taskCreatedBlock: taskCreatedBlock,
             quorumThresholdPercentage: quorumThresholdPercentage,
             quorumNumbers: quorumNumbers
         });
 
-        IIncredibleSquaringTaskManager.TaskResponse memory _taskResponse = IIncredibleSquaringTaskManager.TaskResponse({
+        IPointsGuardTaskManager.TaskResponse memory _taskResponse = IPointsGuardTaskManager.TaskResponse({
             referenceTaskIndex: 0,
-            numberSquared: numberToBeSquared * numberToBeSquared
+            totalPoints: 1000,
+            userPoints: 100
         });
 
         IBLSSignatureChecker.NonSignerStakesAndSignature memory _nonSignerStakesAndSignature;
@@ -192,7 +213,7 @@ contract PointsGuardTest is Test {
             });
         }
 
-        IIncredibleSquaringTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IIncredibleSquaringTaskManager.TaskResponseMetadata({
+        IPointsGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointsGuardTaskManager.TaskResponseMetadata({
             taskResponsedBlock: uint32(block.number),
             hashOfNonSigners: bytes32(0)
         });
@@ -209,38 +230,48 @@ contract PointsGuardTest is Test {
         );
     }
 
-    function testRaiseAndResolveChallenge() public {
+    function testRaiseChallenge() public {
         testRespondToTask();
 
-        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
-            numberToBeSquared: numberToBeSquared,
-            taskCreatedBlock: taskCreatedBlock,
-            quorumThresholdPercentage: quorumThresholdPercentage,
-            quorumNumbers: quorumNumbers
-        });
-
-        IIncredibleSquaringTaskManager.TaskResponse memory _taskResponse = IIncredibleSquaringTaskManager.TaskResponse({
+        IPointsGuardTaskManager.TaskResponse memory _taskResponse = IPointsGuardTaskManager.TaskResponse({
             referenceTaskIndex: 0,
-            numberSquared: numberToBeSquared * numberToBeSquared
+            totalPoints: 1000,
+            userPoints: 100
         });
 
-        IIncredibleSquaringTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IIncredibleSquaringTaskManager.TaskResponseMetadata({
+        IPointsGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointsGuardTaskManager.TaskResponseMetadata({
             taskResponsedBlock: uint32(block.number),
             hashOfNonSigners: bytes32(0)
         });
 
-        BN254.G1Point[] memory _pubkeysOfNonSigningOperators = new BN254.G1Point[](0);
-
         vm.expectEmit(address(taskManager));
-        emit TaskChallengedUnsuccessfully(uint32(0), user);
+        emit TaskChallengedSuccessfully(uint32(0), user);
 
         vm.prank(user);
-        taskManager.raiseAndResolveChallenge(
-            _task,
+        taskManager.raiseChallenge(
             _taskResponse,
-            _taskResponseMetadata,
-            _pubkeysOfNonSigningOperators
+            _taskResponseMetadata
         );
+    }
+
+    function testResolveChallengeValid() public {
+        testRaiseChallenge();
+
+        vm.expectEmit(address(taskManager));
+        emit TaskChallengeResolved(uint32(0), true);
+
+        vm.prank(owner);
+        taskManager.resolveChallenge(0, true);
+    }
+
+    function testResolveChallengeInvalid() public {
+        testRaiseChallenge();
+
+        vm.expectEmit(address(taskManager));
+        emit TaskChallengeResolved(uint32(0), false);
+
+        vm.prank(owner);
+        taskManager.resolveChallenge(0, false);
     }
 
     // ============================================================================================
@@ -285,6 +316,7 @@ contract PointsGuardTest is Test {
 
     function _initializeTaskManager() internal {
         taskManager.initialize(
+            serviceManager, // _serviceManager
             pauserRegistry, // _pauserRegistry
             owner, // initialOwner
             aggregator, // _aggregator
