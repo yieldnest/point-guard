@@ -5,6 +5,8 @@ import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transpa
 
 import {IAVSDirectory} from "@eigenlayer/contracts/interfaces/IAVSDirectory.sol";
 
+import {BN254, IBLSSignatureChecker} from "@eigenlayer-middleware/src/interfaces/IBLSSignatureChecker.sol";
+
 import {StakeRegistry, IDelegationManager, IStrategy} from "@eigenlayer-middleware/src/StakeRegistry.sol";
 import {RegistryCoordinator, IPauserRegistry, IRegistryCoordinator} from "@eigenlayer-middleware/src/RegistryCoordinator.sol";
 import {BLSApkRegistry} from "@eigenlayer-middleware/src/BLSApkRegistry.sol";
@@ -13,16 +15,34 @@ import {IndexRegistry} from "@eigenlayer-middleware/src/IndexRegistry.sol";
 import {EmptyContract} from "@eigenlayer/test/mocks/EmptyContract.sol";
 
 import {IncredibleSquaringServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/IncredibleSquaringServiceManager.sol";
-import {IncredibleSquaringTaskManager} from "../src/IncredibleSquaringTaskManager.sol";
+import {IncredibleSquaringTaskManager, IIncredibleSquaringTaskManager} from "../src/IncredibleSquaringTaskManager.sol";
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
 contract PointsGuardTest is Test {
 
+    event NewTaskCreated(uint32 indexed taskIndex, IIncredibleSquaringTaskManager.Task task);
+
+    event TaskResponded(
+        IIncredibleSquaringTaskManager.TaskResponse taskResponse,
+        IIncredibleSquaringTaskManager.TaskResponseMetadata taskResponseMetadata
+    );
+
+    event TaskChallengedUnsuccessfully(
+        uint32 indexed taskIndex,
+        address indexed challenger
+    );
+
+    uint256 public numberToBeSquared = 10;
+    uint32 public quorumThresholdPercentage = 0;
+    uint32 public taskCreatedBlock;
+    bytes public quorumNumbers = "0x1234";
+
     address public aggregator;
     address public generator;
     address public owner;
+    address public user;
 
     address public emptyContract;
 
@@ -48,6 +68,7 @@ contract PointsGuardTest is Test {
 
         // initialize users
         owner = _createUser("owner");
+        user = _createUser("user");
         aggregator = _createUser("aggregator");
         generator = _createUser("generator");
 
@@ -80,18 +101,20 @@ contract PointsGuardTest is Test {
         // RegistryCoordinator
         address _registryCoordinatorImplementation = address(new RegistryCoordinator(serviceManager, stakeRegistry, blsApkRegistry, indexRegistry));
         TransparentUpgradeableProxy(payable(address(registryCoordinator))).upgradeTo(_registryCoordinatorImplementation);
-        _initializeRegistryCoordinator();
 
         // TaskManager
         address _taskManagerImplementation = address(new IncredibleSquaringTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
         TransparentUpgradeableProxy(payable(address(taskManager))).upgradeTo(_taskManagerImplementation);
-        // @todo - initialize
 
         // ServiceManager
         address _serviceManagerImplementation = address(new IncredibleSquaringServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), IncredibleSquaringTaskManager(taskManager)));
         TransparentUpgradeableProxy(payable(address(serviceManager))).upgradeTo(_serviceManagerImplementation);
 
         vm.stopPrank();
+
+        // initialize contracts
+        _initializeRegistryCoordinator();
+        _initializeTaskManager();
 
         // label contracts
         vm.label({ account: address(stakeRegistry), newLabel: "StakeRegistry" });
@@ -106,18 +129,122 @@ contract PointsGuardTest is Test {
     // Tests
     // ============================================================================================
 
-    function testSanity() public {
-        assertTrue(true);
-        // address _taskManagerImplementation = address(new IncredibleSquaringTaskManager(registryCoordinator, TASK_RESPONSE_WINDOW_BLOCK));
-        // TransparentUpgradeableProxy(payable(address(taskManager))).upgradeTo(address(new IncredibleSquaringTaskManager(registryCoordinator, TASK_RESPONSE_WINDOW_BLOCK)));
+    function testCreateNewTask() public {
 
-        // address _registryCoordinatorImplementation = address(new RegistryCoordinator(serviceManager, stakeRegistry, blsApkRegistry, indexRegistry));
-        // vm.prank(owner);
-        // TransparentUpgradeableProxy(payable(address(registryCoordinator))).upgradeTo(_registryCoordinatorImplementation);
+        taskCreatedBlock = uint32(block.number);
+
+        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
+            numberToBeSquared: numberToBeSquared,
+            taskCreatedBlock: taskCreatedBlock,
+            quorumThresholdPercentage: quorumThresholdPercentage,
+            quorumNumbers: quorumNumbers
+        });
+
+        vm.expectEmit(address(taskManager));
+        emit NewTaskCreated(uint32(0), _task);
+
+        vm.prank(generator);
+        taskManager.createNewTask(
+            numberToBeSquared,
+            quorumThresholdPercentage,
+            quorumNumbers
+        );
+    }
+
+    function testRespondToTask() public {
+        testCreateNewTask();
+
+        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
+            numberToBeSquared: numberToBeSquared,
+            taskCreatedBlock: taskCreatedBlock,
+            quorumThresholdPercentage: quorumThresholdPercentage,
+            quorumNumbers: quorumNumbers
+        });
+
+        IIncredibleSquaringTaskManager.TaskResponse memory _taskResponse = IIncredibleSquaringTaskManager.TaskResponse({
+            referenceTaskIndex: 0,
+            numberSquared: numberToBeSquared * numberToBeSquared
+        });
+
+        IBLSSignatureChecker.NonSignerStakesAndSignature memory _nonSignerStakesAndSignature;
+        {
+            uint32[] memory _nonSignerQuorumBitmapIndices = new uint32[](0);
+            BN254.G1Point[] memory _nonSignerPubkeys = new BN254.G1Point[](0);
+            BN254.G1Point[] memory _quorumApks = new BN254.G1Point[](0);
+            uint256[2] memory _apkG2XY = [uint256(0), uint256(0)];
+            BN254.G2Point memory _apkG2 = BN254.G2Point({
+                X: _apkG2XY,
+                Y: _apkG2XY
+            });
+            BN254.G1Point memory _sigma = BN254.G1Point(0, 0);
+            uint32[] memory _quorumApkIndices = new uint32[](0);
+            uint32[] memory _totalStakeIndices = new uint32[](0);
+            uint32[][] memory _nonSignerStakeIndices = new uint32[][](0);
+            _nonSignerStakesAndSignature = IBLSSignatureChecker.NonSignerStakesAndSignature({
+                nonSignerQuorumBitmapIndices: _nonSignerQuorumBitmapIndices,
+                nonSignerPubkeys: _nonSignerPubkeys,
+                quorumApks: _quorumApks,
+                apkG2: _apkG2,
+                sigma: _sigma,
+                quorumApkIndices: _quorumApkIndices,
+                totalStakeIndices: _totalStakeIndices,
+                nonSignerStakeIndices: _nonSignerStakeIndices
+            });
+        }
+
+        IIncredibleSquaringTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IIncredibleSquaringTaskManager.TaskResponseMetadata({
+            taskResponsedBlock: uint32(block.number),
+            hashOfNonSigners: bytes32(0)
+        });
+
+        vm.expectEmit(address(taskManager));
+        emit TaskResponded(_taskResponse, _taskResponseMetadata);
+
+        vm.prank(aggregator);
+        taskManager.respondToTask(
+            _task,
+            _taskResponse,
+            _nonSignerStakesAndSignature,
+            false
+        );
+    }
+
+    function testRaiseAndResolveChallenge() public {
+        testRespondToTask();
+
+        IIncredibleSquaringTaskManager.Task memory _task = IIncredibleSquaringTaskManager.Task({
+            numberToBeSquared: numberToBeSquared,
+            taskCreatedBlock: taskCreatedBlock,
+            quorumThresholdPercentage: quorumThresholdPercentage,
+            quorumNumbers: quorumNumbers
+        });
+
+        IIncredibleSquaringTaskManager.TaskResponse memory _taskResponse = IIncredibleSquaringTaskManager.TaskResponse({
+            referenceTaskIndex: 0,
+            numberSquared: numberToBeSquared * numberToBeSquared
+        });
+
+        IIncredibleSquaringTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IIncredibleSquaringTaskManager.TaskResponseMetadata({
+            taskResponsedBlock: uint32(block.number),
+            hashOfNonSigners: bytes32(0)
+        });
+
+        BN254.G1Point[] memory _pubkeysOfNonSigningOperators = new BN254.G1Point[](0);
+
+        vm.expectEmit(address(taskManager));
+        emit TaskChallengedUnsuccessfully(uint32(0), user);
+
+        vm.prank(user);
+        taskManager.raiseAndResolveChallenge(
+            _task,
+            _taskResponse,
+            _taskResponseMetadata,
+            _pubkeysOfNonSigningOperators
+        );
     }
 
     // ============================================================================================
-    // Internal Helpers
+    // Internal helpers
     // ============================================================================================
 
     function _createUser(string memory _name) internal returns (address payable) {
@@ -130,11 +257,8 @@ contract PointsGuardTest is Test {
         IRegistryCoordinator.OperatorSetParam[] memory _operatorSetParam = new IRegistryCoordinator.OperatorSetParam[](1);
         _operatorSetParam[0] = IRegistryCoordinator.OperatorSetParam({
             maxOperatorCount: 10,
-            operatorChurnParams: IRegistryCoordinator.OperatorChurnParams({
-                maxChurnPerPeriod: 1,
-                maxChurnPeriod: 1,
-                minChurnPeriod: 1
-            })
+            kickBIPsOfOperatorStake: 100,
+            kickBIPsOfTotalStake: 100
         });
 
         uint96[] memory _minimumStakes = new uint96[](1);
@@ -156,6 +280,15 @@ contract PointsGuardTest is Test {
             _operatorSetParam, // _operatorSetParams
             _minimumStakes, // _minimumStakes
             _strategyParams // _strategyParams
+        );
+    }
+
+    function _initializeTaskManager() internal {
+        taskManager.initialize(
+            pauserRegistry, // _pauserRegistry
+            owner, // initialOwner
+            aggregator, // _aggregator
+            generator // _generator
         );
     }
 }
