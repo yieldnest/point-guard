@@ -1,24 +1,47 @@
-version: '3.8'
+version: '3.7'
+
+# ---- Usage ----
+
+# 1.
+# deploy:
+# `docker-compose up --remove-orphans --build`
+
+# 2.
+# enter the client container:
+# `docker-compose exec client bash`
+
+# 3.
+# respond to task:
+# TODO
+
+# --------
 
 services:
 
   anvil:
     image: ghcr.io/foundry-rs/foundry:latest
-    platform: linux/amd64  # specify your platform here
+    platform: linux/amd64
     working_dir: /anvil
-    env_file:
-      - ../.env
     environment:
-      - FORK_URL=${FORK_URL}
+      - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
     ports:
       - "8545:8545"
-    command: anvil --fork-url $FORK_URL --host 0.0.0.0
+    entrypoint: ["sh", "-c", "anvil --fork-url ${ETHEREUM_RPC_URL} --host 0.0.0.0"]
+  
+  # client:
+  #   image: ghcr.io/foundry-rs/foundry:latest
+  #   platform: linux/amd64
+  #   working_dir: /contracts
+  #   volumes:
+  #     - ..:/contracts
+  #   entrypoint: ["sh", "-c", "forge client --rpc-url http://anvil:8545"]
 
   deployer:
-    image: python:3.9-slim
-    working_dir: /client
+    image: ghcr.io/foundry-rs/foundry:latest
+    platform: linux/amd64
     volumes:
-      - .:/client
+      - ..:/contracts
+    working_dir: /contracts
     depends_on:
       - anvil
-    command: python client.py
+    entrypoint: ["sh", "-c", "sleep 10 && forge script script/PointsGuardDemo.s.sol:PointsGuardDemo --slow --rpc-url http://anvil:8545 --broadcast"]
