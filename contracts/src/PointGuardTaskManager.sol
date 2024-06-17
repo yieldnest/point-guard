@@ -10,16 +10,16 @@ import {RegistryCoordinator} from "@eigenlayer-middleware/src/RegistryCoordinato
 import {BLSSignatureChecker, IRegistryCoordinator} from "@eigenlayer-middleware/src/BLSSignatureChecker.sol";
 import {OperatorStateRetriever} from "@eigenlayer-middleware/src/OperatorStateRetriever.sol";
 import "@eigenlayer-middleware/src/libraries/BN254.sol";
-import "./IPointsGuardTaskManager.sol";
-import "./IPointsGuardServiceManager.sol";
+import "./IPointGuardTaskManager.sol";
+import "./IPointGuardServiceManager.sol";
 
-contract PointsGuardTaskManager is
+contract PointGuardTaskManager is
     Initializable,
     OwnableUpgradeable,
     Pausable,
     BLSSignatureChecker,
     OperatorStateRetriever,
-    IPointsGuardTaskManager
+    IPointGuardTaskManager
 {
     using BN254 for BN254.G1Point;
 
@@ -47,7 +47,7 @@ contract PointsGuardTaskManager is
     address public aggregator;
     address public generator;
 
-    IPointsGuardServiceManager public pointsGuardServiceManager;
+    IPointGuardServiceManager public pointGuardServiceManager;
 
     /* MODIFIERS */
     modifier onlyAggregator() {
@@ -70,7 +70,7 @@ contract PointsGuardTaskManager is
     }
 
     function initialize(
-        IPointsGuardServiceManager _pointsGuardServiceManager,
+        IPointGuardServiceManager _pointGuardServiceManager,
         IPauserRegistry _pauserRegistry,
         address initialOwner,
         address _aggregator,
@@ -78,7 +78,7 @@ contract PointsGuardTaskManager is
     ) public initializer {
         _initializePauser(_pauserRegistry, UNPAUSE_ALL);
         _transferOwnership(initialOwner);
-        pointsGuardServiceManager = _pointsGuardServiceManager;
+        pointGuardServiceManager = _pointGuardServiceManager;
         aggregator = _aggregator;
         generator = _generator;
     }
@@ -91,7 +91,7 @@ contract PointsGuardTaskManager is
         uint32 quorumThresholdPercentage,
         bytes calldata quorumNumbers
     ) external onlyTaskGenerator {
-        if (!pointsGuardServiceManager.isProtocolRegistered(protocolId)) revert("Protocol not registered with PointsGuard");
+        if (!pointGuardServiceManager.isProtocolRegistered(protocolId)) revert("Protocol not registered with PointGuard");
 
         // create a new task struct
         Task memory newTask;
