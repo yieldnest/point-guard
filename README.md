@@ -1,7 +1,7 @@
 <p align="center">
 <a href="https://www.yieldnest.finance/pointguard">
     <img src="public/pointguard-banner.jpg" alt="PointGuard
- Banner" height="80">
+ Banner" height="442">
 </a>
 </p>
 
