@@ -14,8 +14,8 @@ import {IndexRegistry} from "@eigenlayer-middleware/src/IndexRegistry.sol";
 
 import {EmptyContract} from "@eigenlayer/test/mocks/EmptyContract.sol";
 
-import {PointsGuardServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/PointsGuardServiceManager.sol";
-import {PointsGuardTaskManager, IPointsGuardTaskManager} from "../src/PointsGuardTaskManager.sol";
+import {PointGuardServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/PointGuardServiceManager.sol";
+import {PointGuardTaskManager, IPointGuardTaskManager} from "../src/PointGuardTaskManager.sol";
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
@@ -40,8 +40,8 @@ contract PointsGuardDemo is Script {
 
     address public emptyContract;
 
-    PointsGuardTaskManager public taskManager;
-    PointsGuardServiceManager public serviceManager;
+    PointGuardTaskManager public taskManager;
+    PointGuardServiceManager public serviceManager;
     RegistryCoordinator public registryCoordinator;
     StakeRegistry public stakeRegistry;
     BLSApkRegistry public blsApkRegistry;
@@ -97,8 +97,8 @@ contract PointsGuardDemo is Script {
         emptyContract = address(new EmptyContract());
 
         // deploy proxy contracts
-        taskManager = PointsGuardTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
-        serviceManager = PointsGuardServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        taskManager = PointGuardTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        serviceManager = PointGuardServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         registryCoordinator = RegistryCoordinator(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         stakeRegistry = StakeRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         blsApkRegistry = BLSApkRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
@@ -129,11 +129,11 @@ contract PointsGuardDemo is Script {
         TransparentUpgradeableProxy(payable(address(registryCoordinator))).upgradeTo(_registryCoordinatorImplementation);
 
         // TaskManager
-        address _taskManagerImplementation = address(new PointsGuardTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
+        address _taskManagerImplementation = address(new PointGuardTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
         TransparentUpgradeableProxy(payable(address(taskManager))).upgradeTo(_taskManagerImplementation);
 
         // ServiceManager
-        address _serviceManagerImplementation = address(new PointsGuardServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), PointsGuardTaskManager(taskManager), owner));
+        address _serviceManagerImplementation = address(new PointGuardServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), PointGuardTaskManager(taskManager), owner));
         TransparentUpgradeableProxy(payable(address(serviceManager))).upgradeTo(_serviceManagerImplementation);
 
         vm.stopBroadcast();
@@ -200,14 +200,6 @@ contract PointsGuardDemo is Script {
     function _createNewTask() public {
 
         taskCreatedBlock = uint32(block.number);
-
-        IPointsGuardTaskManager.Task memory _task = IPointsGuardTaskManager.Task({
-            protocolId: protocolId,
-            user: user,
-            taskCreatedBlock: taskCreatedBlock,
-            quorumThresholdPercentage: quorumThresholdPercentage,
-            quorumNumbers: quorumNumbers
-        });
 
         vm.startBroadcast(ownerPrivateKey);
 
