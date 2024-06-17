@@ -14,19 +14,19 @@ import {IndexRegistry} from "@eigenlayer-middleware/src/IndexRegistry.sol";
 
 import {EmptyContract} from "@eigenlayer/test/mocks/EmptyContract.sol";
 
-import {PointsGuardServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/PointsGuardServiceManager.sol";
-import {PointsGuardTaskManager, IPointsGuardTaskManager} from "../src/PointsGuardTaskManager.sol";
+import {PointGuardServiceManager, IRegistryCoordinator, IStakeRegistry} from "../src/PointGuardServiceManager.sol";
+import {PointGuardTaskManager, IPointGuardTaskManager} from "../src/PointGuardTaskManager.sol";
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
-contract PointsGuardTest is Test {
+contract PointGuardTest is Test {
 
-    event NewTaskCreated(uint32 indexed taskIndex, IPointsGuardTaskManager.Task task);
+    event NewTaskCreated(uint32 indexed taskIndex, IPointGuardTaskManager.Task task);
 
     event TaskResponded(
-        IPointsGuardTaskManager.TaskResponse taskResponse,
-        IPointsGuardTaskManager.TaskResponseMetadata taskResponseMetadata
+        IPointGuardTaskManager.TaskResponse taskResponse,
+        IPointGuardTaskManager.TaskResponseMetadata taskResponseMetadata
     );
 
     event TaskChallengedUnsuccessfully(
@@ -57,8 +57,8 @@ contract PointsGuardTest is Test {
 
     address public emptyContract;
 
-    PointsGuardTaskManager public taskManager;
-    PointsGuardServiceManager public serviceManager;
+    PointGuardTaskManager public taskManager;
+    PointGuardServiceManager public serviceManager;
     RegistryCoordinator public registryCoordinator;
     StakeRegistry public stakeRegistry;
     BLSApkRegistry public blsApkRegistry;
@@ -88,8 +88,8 @@ contract PointsGuardTest is Test {
         emptyContract = address(new EmptyContract());
 
         // deploy proxy contracts
-        taskManager = PointsGuardTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
-        serviceManager = PointsGuardServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        taskManager = PointGuardTaskManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
+        serviceManager = PointGuardServiceManager(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         registryCoordinator = RegistryCoordinator(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         stakeRegistry = StakeRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
         blsApkRegistry = BLSApkRegistry(address(new TransparentUpgradeableProxy(emptyContract, address(proxyOwner), "")));
@@ -115,11 +115,11 @@ contract PointsGuardTest is Test {
         TransparentUpgradeableProxy(payable(address(registryCoordinator))).upgradeTo(_registryCoordinatorImplementation);
 
         // TaskManager
-        address _taskManagerImplementation = address(new PointsGuardTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
+        address _taskManagerImplementation = address(new PointGuardTaskManager(IRegistryCoordinator(registryCoordinator), TASK_RESPONSE_WINDOW_BLOCK));
         TransparentUpgradeableProxy(payable(address(taskManager))).upgradeTo(_taskManagerImplementation);
 
         // ServiceManager
-        address _serviceManagerImplementation = address(new PointsGuardServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), PointsGuardTaskManager(taskManager), owner));
+        address _serviceManagerImplementation = address(new PointGuardServiceManager(IAVSDirectory(avsDirectory), IRegistryCoordinator(registryCoordinator), IStakeRegistry(stakeRegistry), PointGuardTaskManager(taskManager), owner));
         TransparentUpgradeableProxy(payable(address(serviceManager))).upgradeTo(_serviceManagerImplementation);
 
         vm.stopPrank();
@@ -150,7 +150,7 @@ contract PointsGuardTest is Test {
 
         taskCreatedBlock = uint32(block.number);
 
-        IPointsGuardTaskManager.Task memory _task = IPointsGuardTaskManager.Task({
+        IPointGuardTaskManager.Task memory _task = IPointGuardTaskManager.Task({
             protocolId: protocolId,
             user: user,
             taskCreatedBlock: taskCreatedBlock,
@@ -173,7 +173,7 @@ contract PointsGuardTest is Test {
     function testRespondToTask() public {
         testCreateNewTask();
 
-        IPointsGuardTaskManager.Task memory _task = IPointsGuardTaskManager.Task({
+        IPointGuardTaskManager.Task memory _task = IPointGuardTaskManager.Task({
             protocolId: protocolId,
             user: user,
             taskCreatedBlock: taskCreatedBlock,
@@ -181,7 +181,7 @@ contract PointsGuardTest is Test {
             quorumNumbers: quorumNumbers
         });
 
-        IPointsGuardTaskManager.TaskResponse memory _taskResponse = IPointsGuardTaskManager.TaskResponse({
+        IPointGuardTaskManager.TaskResponse memory _taskResponse = IPointGuardTaskManager.TaskResponse({
             referenceTaskIndex: 0,
             totalPoints: 1000,
             userPoints: 100
@@ -213,7 +213,7 @@ contract PointsGuardTest is Test {
             });
         }
 
-        IPointsGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointsGuardTaskManager.TaskResponseMetadata({
+        IPointGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointGuardTaskManager.TaskResponseMetadata({
             taskResponsedBlock: uint32(block.number),
             hashOfNonSigners: bytes32(0)
         });
@@ -233,13 +233,13 @@ contract PointsGuardTest is Test {
     function testRaiseChallenge() public {
         testRespondToTask();
 
-        IPointsGuardTaskManager.TaskResponse memory _taskResponse = IPointsGuardTaskManager.TaskResponse({
+        IPointGuardTaskManager.TaskResponse memory _taskResponse = IPointGuardTaskManager.TaskResponse({
             referenceTaskIndex: 0,
             totalPoints: 1000,
             userPoints: 100
         });
 
-        IPointsGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointsGuardTaskManager.TaskResponseMetadata({
+        IPointGuardTaskManager.TaskResponseMetadata memory _taskResponseMetadata = IPointGuardTaskManager.TaskResponseMetadata({
             taskResponsedBlock: uint32(block.number),
             hashOfNonSigners: bytes32(0)
         });

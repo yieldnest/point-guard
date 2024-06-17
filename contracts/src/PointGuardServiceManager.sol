@@ -2,30 +2,30 @@
 pragma solidity ^0.8.9;
 
 import "@eigenlayer/contracts/libraries/BytesLib.sol";
-import "./IPointsGuardTaskManager.sol";
-import "./IPointsGuardServiceManager.sol";
+import "./IPointGuardTaskManager.sol";
+import "./IPointGuardServiceManager.sol";
 import "@eigenlayer-middleware/src/ServiceManagerBase.sol";
 
 /**
- * @title Primary entrypoint for procuring services from PointsGuard.
+ * @title Primary entrypoint for procuring services from PointGuard.
  * @author Layr Labs, Inc.
  */
-contract PointsGuardServiceManager is IPointsGuardServiceManager, ServiceManagerBase {
+contract PointGuardServiceManager is IPointGuardServiceManager, ServiceManagerBase {
     using BytesLib for bytes;
 
     uint256 public protocolId;
 
-    mapping(uint256 => string) public pointsScriptReferences;
+    mapping(uint256 => string) public pointsOperatorReferences;
 
     address public immutable registrationManager;
 
-    IPointsGuardTaskManager public immutable pointsGuardTaskManager;
+    IPointGuardTaskManager public immutable PointGuardTaskManager;
 
     /// @notice when applied to a function, ensures that the function is only callable by the `registryCoordinator`.
-    modifier onlyPointsGuardTaskManager() {
+    modifier onlyPointGuardTaskManager() {
         require(
-            msg.sender == address(pointsGuardTaskManager),
-            "onlyPointsGuardTaskManager: not from credible squaring task manager"
+            msg.sender == address(PointGuardTaskManager),
+            "onlyPointGuardTaskManager: not from point guard task manager"
         );
         _;
     }
@@ -42,26 +42,26 @@ contract PointsGuardServiceManager is IPointsGuardServiceManager, ServiceManager
         IAVSDirectory _avsDirectory,
         IRegistryCoordinator _registryCoordinator,
         IStakeRegistry _stakeRegistry,
-        IPointsGuardTaskManager _pointsGuardTaskManager,
+        IPointGuardTaskManager _pointGuardTaskManager,
         address _registrationManager
     )
         ServiceManagerBase(
             _avsDirectory,
-            IPaymentCoordinator(address(0)), // inc-sq doesn't need to deal with payments
+            IPaymentCoordinator(address(0)),
             _registryCoordinator,
             _stakeRegistry
         )
     {
-        pointsGuardTaskManager = _pointsGuardTaskManager;
+        PointGuardTaskManager = _pointGuardTaskManager;
         registrationManager = _registrationManager;
     }
 
-    /// @notice Registers a new protocol with PointsGuard.
-    /// @dev The script reference should be reviewed by the PointsGuard team/gov to ensure it is safe.
-    /// @param pointsScriptReference The `pointsScriptReference` is a Github URL that points to the script that
-    ///                              PointsGuard will use to calculate the amount of points.
-    function registerProtocol(string memory pointsScriptReference) external onlyRegistrationManager {
-        pointsScriptReferences[protocolId] = pointsScriptReference;
+    /// @notice Registers a new protocol with PointGuard.
+    /// @dev The operator reference should be reviewed by the PointGuard team/gov to ensure it is safe.
+    /// @param pointsOperatorReference The `pointsOperatorReference` is a Github URL that points to the operator that
+    ///                              PointGuard will use to calculate the amount of points.
+    function registerProtocol(string memory pointsOperatorReference) external onlyRegistrationManager {
+        pointsOperatorReferences[protocolId] = pointsOperatorReference;
         ++protocolId;
     }
 
@@ -70,11 +70,11 @@ contract PointsGuardServiceManager is IPointsGuardServiceManager, ServiceManager
     ///      We recommend writing slashing logic without integrating with the Slasher at this point in time.
     function freezeOperator(
         address operatorAddr
-    ) external onlyPointsGuardTaskManager {
+    ) external onlyPointGuardTaskManager {
         // slasher.freezeOperator(operatorAddr);
     }
 
     function isProtocolRegistered(uint256 _protocolId) external view returns (bool) {
-        return bytes(pointsScriptReferences[_protocolId]).length > 0;
+        return bytes(pointsOperatorReferences[_protocolId]).length > 0;
     }
 }
