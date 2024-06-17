@@ -1,3 +1,10 @@
+<p align="center">
+<a href="https://www.yieldnest.finance/pointguard">
+    <img src="public/pointguard-banner.jpg" alt="PointGuard
+ Banner" height="442">
+</a>
+</p>
+
 ## PointGuard
 
 PointGuard is a protocol points system that is validated by an Active Validator Service (AVS) powered by EigenLayer.
