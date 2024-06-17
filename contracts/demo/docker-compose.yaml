@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    platform: linux/amd64  # specify your platform here
+    working_dir: /anvil
+    env_file:
+      - ../.env
+    environment:
+      - FORK_URL=${FORK_URL}
+    ports:
+      - "8545:8545"
+    command: anvil --fork-url $FORK_URL --host 0.0.0.0
+
+  deployer:
+    image: python:3.9-slim
+    working_dir: /client
+    volumes:
+      - .:/client
+    depends_on:
+      - anvil
+    command: python client.py
