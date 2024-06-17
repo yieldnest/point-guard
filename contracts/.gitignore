@@ -10,6 +10,7 @@ docs/
 
 # Dotenv file
 .env
+demo/.env
 
 # Not sure what this folder is for.. so removing for now
 data/

@@ -77,6 +77,12 @@ contract PointGuardTest is Test {
 
     function setUp() public {
 
+        // create fork
+        vm.createSelectFork(
+            vm.envString("ETHEREUM_RPC_URL"), // rpc url
+            20089906 // fork block number
+        );
+
         // initialize users
         proxyOwner = _createUser("proxyOwner");
         owner = _createUser("owner");
