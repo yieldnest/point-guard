@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+
+buildCommand = "npm i && sleep 10 && npm run start"
+
+nixpacksVersion = "1.21.3"

@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  # yn-alerts-db:
+  #   image: postgres:16
+  #   restart: always
+  #   container_name: 'yn-alerts-db'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #     POSTGRES_DB: alerts
+  #   ports:
+  #     - 5433:5432
+
+  yn-points-db:
+    image: postgres:16
+    restart: always
+    container_name: 'yn-points-db'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: points
+    ports:
+      - 5433:5432      

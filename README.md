@@ -23,6 +23,25 @@ The AVS listens to ERC20 or ERC721 contracts and calculates reward points for us
 - **Gaming**: Reward players with points for in-game achievements and activities.
 - **DeFi Platforms**: Incentivize users for participating in decentralized finance activities.
 
-### Getting Started
+### Technical Overview
 
-1. **Clone the Repository**:
+**Contracts**
+
+The contracts have been forked directly from the incredible squaring example. For calculating the protocol rewards points, the avs operator service is run and tasks are submitted to the Task Manager. Currently, the Aggregator has not been implemented yet, and the task submission flow has not been connected to the AVS service.
+
+<p align="center">
+<img src="public/yn-point-guard-contracts.png" alt="PointGuard Banner" height="442">
+</p>
+
+Contracts Demo: https://www.loom.com/share/0bf11453e7bb4bb49dbf45db25f62a31?sid=95a78a90-a228-45d2-8ab9-f6f8cca62db8
+
+**Operator Service**
+
+The Operator service is a protocl indexing service the calculates the points a user has acrused based on ERC20 or ERC721 Transfers events. The configuration is flexible to handle other contract type, but current our thinking is the Tokens would be enough to start.
+
+The rewards are caluclated at 2 Points per hour and served with GraqphQL using an indexing framework called Ponder.
+
+**Note to AVS Hack Judges**
+
+We are currently building out our mainnet LRT protocol and didn't have a lot of time to allocate to this AVS hack. However, we are going to continue building this project becauses it's important to us. We look forward to collaborating with Eigen and the ecosystem on a more fair and trustworthy protocol points standard based on AVS technology.
+
